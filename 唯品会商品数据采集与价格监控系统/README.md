@@ -29,16 +29,14 @@
 唯品会商品数据采集与价格监控系统/
 ├─ README.md              # 项目说明
 ├─ requirements.txt       # 依赖清单
-├─ config.py              # 配置层：请求头、采集参数、接口常量、输出路径
-├─ vip_apisign.js         # ★ JS 逆向产物：接口加签算法（Python 通过 execjs 调用）
-├─ core.py                # 核心层：加签 + 请求（限速/重试/风控）+ 接口 + 解析
-├─ store.py               # 存储分析层：CSV 落盘 + 快照比价 + 统计报表
-├─ main.py                # 入口：采集编排 + 定时调度
+├─ main.py                # 单文件实现：加签 + 请求 + 解析 + 落盘比价 + 入口
+├─ vip_apisign.js         # ★ JS 逆向产物：加签算法源码（供独立查阅 / 复用）
 └─ output/                # 运行结果（CSV 快照 / 价格变动 / 统计报表）
 ```
 
-> Python 源码只保留 3 个文件（config / core / store + 入口 main），
-> 便于上传源码包审核；分层依旧清晰：配置 → 核心 → 存储 → 入口。
+> 全部逻辑收敛在单个 `main.py` 中：加签算法以 `JS_CODE` 常量内嵌其中，
+> 文件内按「配置 → 加签与请求 → 接口与解析 → 落盘与比价 → 入口」分块组织，便于整体阅读，也能直接提交到只接受单文件上传的平台。
+> 同目录的 `vip_apisign.js` 是加签算法的独立源码文件，便于单独查阅与复用；`main.py` 运行时不依赖它。
 
 ---
 
@@ -55,7 +53,7 @@ python main.py
 python main.py --loop --interval 3600
 ```
 
-> `vip_apisign.js` 由 Node 的 crypto 模块驱动，因此运行环境需要 Node.js（用于 execjs）。
+> 加签算法依赖 Node 的 `crypto` 模块，Python 侧通过 `execjs` 调用，因此运行环境需要 Node.js（已内嵌进 `main.py`，无需单独加载 JS 文件）。
 
 产出文件在 `output/` 下：
 
@@ -172,7 +170,7 @@ AQN1cmwBCXBhcmFtSGFzaAIBB3ZpcHRhbmsCAQNjaWQCAQZzZWNyZXQCoQ==
 3. 密钥还原：同文件常量经模块 `c71e` 的 `AES-CBC`（key=`weixin_smallmina`、iv=`weixin`）解密，得到签名密钥
 4. 参数哈希：按 key 升序、剔除 `api_key`、`k=v` 拼接后 SHA1
 5. VMP 拆解：模块 `7460` 的 `DynamicVM` 字节码仅含"变量入栈/拼接/SHA1"三类指令，还原后确认等同于 `SHA1(路径+参数哈希+VIP_TANK+mars_cid+密钥)`
-6. 算法落地：将上述链路写成独立 JS（`vip_apisign.js`），Python 侧通过 execjs 调用，保证算法可独立演进
+6. 算法落地：将上述链路写成独立 JS（`vip_apisign.js`），并内嵌进 `main.py` 由 Python 侧通过 execjs 调用，保证算法可独立演进
 7. 工程化：分层划分为配置层、加签层、请求层、接口层、解析层、存储层、分析层、调度层
 8. 容错设计：请求重试、随机限速、TFS 风控冷却与优雅退出、失败数据不丢失
 
